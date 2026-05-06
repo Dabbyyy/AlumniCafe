@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { saveTransaction } from './transactions';
 import { 
   Coffee, 
   ChevronRight, 
@@ -186,6 +187,30 @@ export default function App() {
       alert('Insufficient cash tendered!');
       return;
     }
+
+    // Save transaction to local database
+    const now = new Date();
+    saveTransaction({
+      id: txnNumber,
+      date: now.toISOString(),
+      time: now.toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit', hour12: true }),
+      cashier: 'Staff 01',
+      items: cart.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price,
+        category: item.category,
+      })),
+      subtotal,
+      discountType,
+      discountRate,
+      discountAmount,
+      vatAmount,
+      total,
+      cashTendered: cash,
+      change: Math.max(0, cash - total),
+    });
+
     setShowReceipt(true);
     setShowPaymentModal(false);
   };
@@ -247,276 +272,266 @@ export default function App() {
       </header>
 
       <main className="flex flex-1 overflow-hidden relative">
-        {/* PANEL 1: Categories sidebar */}
-        <aside className="w-72 bg-white border-r border-gray-100 flex flex-col shrink-0 shadow-sm z-10">
-          <div className="p-8">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-8 flex items-center gap-3">
-              <Tag className="w-3 h-3 text-hcdc-gold" /> Menu Categories
-            </h2>
-            <nav className="flex flex-col gap-3">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.name}
-                  onClick={() => setCurrentCategory(cat.name)}
-                  className={`flex items-center gap-5 px-6 py-4 rounded-2xl transition-all duration-300 group text-left relative overflow-hidden ${
-                    currentCategory === cat.name
-                      ? 'bg-hcdc-blue text-white shadow-xl shadow-hcdc-blue/20 translate-x-1'
-                      : 'hover:bg-hcdc-light-blue text-gray-500 hover:text-hcdc-blue'
-                  }`}
-                >
-                  {currentCategory === cat.name && (
-                    <motion.div layoutId="activeCat" className="absolute left-0 top-0 bottom-0 w-1.5 bg-hcdc-red" />
-                  )}
-                  <span className="text-2xl group-hover:scale-110 transition-transform duration-300">{cat.icon}</span>
-                  <span className="text-sm font-bold tracking-tight">{cat.name}</span>
-                </button>
-              ))}
-            </nav>
-          </div>
-          <div className="mt-auto p-8 bg-gradient-to-b from-transparent to-hcdc-light-blue/20">
-            <div className="p-4 rounded-2xl bg-white border border-hcdc-blue/5 shadow-sm text-center">
-              <p className="text-[10px] text-hcdc-blue font-black uppercase tracking-widest mb-1 italic">
-                Our Mission
-              </p>
-              <p className="text-[11px] text-gray-500 font-medium italic leading-relaxed">
-                "Blaze your Trail to Success"
-              </p>
-            </div>
-          </div>
-        </aside>
-
-        {/* PANEL 2: Product Grid */}
-        <section className="flex-1 bg-[#F9FAFB] p-10 flex flex-col min-w-0 overflow-hidden">
-          <div className="mb-10 flex justify-between items-center bg-white py-3 px-6 rounded-2xl border border-gray-100 shadow-sm">
-             <div className="flex items-center gap-4 w-full">
-               <Search className="w-5 h-5 text-gray-400" />
-               <input 
-                type="text" 
-                placeholder="Search menu items..." 
-                className="w-full bg-transparent border-none focus:ring-0 text-sm py-2 font-medium"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-               />
-             </div>
-             <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap bg-gray-50 px-4 py-2 rounded-xl">
-               <CheckCircle2 className="w-3 h-3 text-green-500" /> System Online
-             </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto pr-4 -mr-4 custom-scrollbar">
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pb-12">
-              {filteredProducts.map((product) => (
-                <motion.div
-                  key={product.id}
-                  whileHover={{ y: -8, shadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)" }}
-                  whileTap={{ scale: 0.96 }}
-                  onClick={() => addToCart(product)}
-                  className="bg-white rounded-[2rem] p-7 border border-gray-50 shadow-sm hover:border-hcdc-blue/20 transition-all cursor-pointer group relative overflow-hidden"
-                >
-                  <div className="flex flex-col items-center text-center gap-4">
-                    <div className="w-20 h-20 rounded-3xl bg-hcdc-light-blue flex items-center justify-center text-4xl group-hover:bg-white group-hover:scale-110 transition-all duration-300 shadow-inner group-hover:shadow-lg">
-                      {product.icon}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-800 text-sm leading-snug h-12 flex items-center justify-center px-2">{product.name}</h3>
-                      <p className="text-hcdc-red font-black text-xl mt-2 tracking-tight">{formatCurrency(product.price)}</p>
-                    </div>
-                    <div className="px-4 py-1.5 bg-gray-50 group-hover:bg-hcdc-blue group-hover:text-white text-gray-400 rounded-xl text-[10px] font-bold uppercase tracking-[0.1em] transition-colors">
-                      {product.category}
-                    </div>
-                  </div>
-                  
-                  {/* Floating +1 animation */}
-                  <AnimatePresence>
-                    {animations.map(anim => anim.id === product.id && (
-                      <motion.div
-                        key={anim.key}
-                        initial={{ opacity: 1, y: 0 }}
-                        animate={{ opacity: 0, y: -120 }}
-                        exit={{ opacity: 0 }}
-                        className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                      >
-                        <span className="text-3xl font-black text-hcdc-red drop-shadow-md">+1</span>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-
-                  <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <div className="w-8 h-8 rounded-full bg-hcdc-red text-white flex items-center justify-center">
-                      <Plus className="w-4 h-4" />
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </section>
-      </main>
-
-      {/* PANEL 3: Order Summary (NOW AT BOTTOM) */}
-      <footer className={`${isCartExpanded ? 'h-56' : 'h-14'} bg-white border-t border-gray-200 flex shadow-[0_-15px_30px_rgba(0,0,0,0.05)] z-30 transition-all duration-500 ease-in-out shrink-0 overflow-hidden`}>
-        {/* Left: Cart Items Horizontal Scroll */}
-        <div className="flex-1 border-r border-gray-100 flex flex-col min-w-0">
-          <div 
-            onClick={() => setIsCartExpanded(!isCartExpanded)}
-            className="px-6 py-3 border-b border-gray-50 flex justify-between items-center bg-gray-50/50 cursor-pointer hover:bg-gray-100 transition-colors shrink-0"
-          >
-            <div className="flex items-center gap-4">
-              <div className="relative">
-                <div className="w-8 h-8 rounded-lg bg-hcdc-blue/5 flex items-center justify-center">
-                  <ShoppingCart className="w-4 h-4 text-hcdc-blue" />
-                </div>
-                <AnimatePresence>
-                  {totalItems > 0 && (
-                    <motion.span 
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="absolute -top-1.5 -right-1.5 bg-hcdc-red text-white text-[9px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center shadow-sm border-2 border-white"
-                    >
-                      {totalItems}
-                    </motion.span>
-                  )}
-                </AnimatePresence>
-              </div>
-              <h2 className="font-heading font-bold text-xs uppercase tracking-widest text-hcdc-blue flex items-center gap-3">
-                Current Order 
-                <span className="text-gray-400 font-mono text-[9px] bg-white px-2 py-0.5 rounded border border-gray-100">{txnNumber}</span>
-                {isCartExpanded ? <ChevronDown className="w-3 h-3 text-gray-300" /> : <ChevronUp className="w-3 h-3 text-gray-300" />}
+          {/* PANEL 1: Categories sidebar */}
+          <aside className="w-72 bg-white border-r border-gray-100 flex flex-col shrink-0 shadow-sm z-10">
+            <div className="p-8">
+              <h2 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-8 flex items-center gap-3">
+                <Tag className="w-3 h-3 text-hcdc-gold" /> Menu Categories
               </h2>
-            </div>
-            <button 
-              onClick={(e) => { e.stopPropagation(); clearOrder(); }}
-              className="text-[9px] font-black uppercase tracking-widest text-gray-400 hover:text-hcdc-red flex items-center gap-2 py-1 px-3 rounded-lg hover:bg-hcdc-light-red transition-all"
-            >
-              <Trash2 className="w-3 h-3" /> Clear Cart
-            </button>
-          </div>
-          
-          <div className="flex-1 overflow-x-auto overflow-y-hidden p-5 flex gap-4 custom-scrollbar items-center bg-white">
-            {cart.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-gray-300">
-                <p className="text-[9px] font-black uppercase tracking-[0.2em] italic opacity-50">Nothing in your tray yet</p>
-              </div>
-            ) : (
-              cart.map((item) => (
-                <motion.div 
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  whileHover={{ y: -5 }}
-                  key={item.id} 
-                  className="w-48 h-32 bg-white border border-gray-100 rounded-[1.5rem] p-4 flex flex-col justify-between shrink-0 hover:border-hcdc-blue/30 hover:shadow-xl transition-all group relative"
-                >
-                  <div className="flex gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-hcdc-light-blue flex items-center justify-center text-2xl shrink-0">
-                      {item.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-[11px] font-black text-gray-800 truncate leading-tight">{item.name}</h4>
-                      <p className="text-[11px] font-black text-hcdc-red mt-0.5 tracking-tight">{formatCurrency(item.price * item.quantity * (1 - discountRate))}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between mt-auto">
-                    <div className="flex items-center gap-1.5 bg-gray-50 rounded-xl px-1 py-0.5 border border-gray-100 shadow-inner">
-                      <button 
-                        onClick={() => updateQuantity(item.id, -1)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-white shadow-sm hover:text-hcdc-red transition-all active:scale-90"
-                      >
-                        <Minus className="w-3 h-3" />
-                      </button>
-                      <span className="text-xs font-black w-5 text-center tabular-nums">{item.quantity}</span>
-                      <button 
-                        onClick={() => updateQuantity(item.id, 1)}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg bg-white shadow-sm hover:text-hcdc-blue transition-all active:scale-90"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                    <button 
-                       onClick={() => updateQuantity(item.id, -item.quantity)}
-                       className="w-8 h-8 rounded-full bg-hcdc-light-red text-hcdc-red flex items-center justify-center hover:bg-hcdc-red hover:text-white transition-all shadow-sm group/del"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Middle: Discount & Totals */}
-        <div className="w-[450px] border-r border-gray-100 flex flex-col p-6 bg-gray-50/30">
-          <div className="flex gap-6 items-start">
-            {/* Discounts */}
-            <div className="flex-1">
-              <label className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 block mb-3">
-                Discount
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                {(['REGULAR', 'PWD', 'SENIOR', 'ALUMNI'] as DiscountType[]).map((type) => (
+              <nav className="flex flex-col gap-3">
+                {CATEGORIES.map((cat) => (
                   <button
-                    key={type}
-                    onClick={() => setDiscountType(type)}
-                    className={`py-1.5 px-3 rounded-lg text-[9px] font-black border-2 transition-all flex items-center justify-between gap-1 ${
-                      discountType === type
-                        ? type === 'PWD' ? 'bg-purple-600 border-purple-600 text-white shadow-lg' :
-                          type === 'SENIOR' ? 'bg-hcdc-gold border-hcdc-gold text-white shadow-lg' :
-                          type === 'ALUMNI' ? 'bg-hcdc-blue border-hcdc-blue text-white shadow-lg' :
-                          'bg-gray-800 border-gray-800 text-white shadow-lg'
-                        : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200'
+                    key={cat.name}
+                    onClick={() => setCurrentCategory(cat.name)}
+                    className={`flex items-center gap-5 px-6 py-4 rounded-2xl transition-all duration-300 group text-left relative overflow-hidden ${
+                      currentCategory === cat.name
+                        ? 'bg-hcdc-blue text-white shadow-xl shadow-hcdc-blue/20 translate-x-1'
+                        : 'hover:bg-hcdc-light-blue text-gray-500 hover:text-hcdc-blue'
                     }`}
                   >
-                    <span>{type === 'REGULAR' ? 'None' : type}</span>
-                    <span className="opacity-60 text-[7px]">
-                      {type === 'REGULAR' ? '' : type === 'ALUMNI' ? '10%' : '20%'}
-                    </span>
+                    {currentCategory === cat.name && (
+                      <motion.div layoutId="activeCat" className="absolute left-0 top-0 bottom-0 w-1.5 bg-hcdc-red" />
+                    )}
+                    <span className="text-2xl group-hover:scale-110 transition-transform duration-300">{cat.icon}</span>
+                    <span className="text-sm font-bold tracking-tight">{cat.name}</span>
                   </button>
+                ))}
+              </nav>
+            </div>
+            <div className="mt-auto p-8 bg-gradient-to-b from-transparent to-hcdc-light-blue/20">
+              <div className="p-4 rounded-2xl bg-white border border-hcdc-blue/5 shadow-sm text-center">
+                <p className="text-[10px] text-hcdc-blue font-black uppercase tracking-widest mb-1 italic">
+                  Our Mission
+                </p>
+                <p className="text-[11px] text-gray-500 font-medium italic leading-relaxed">
+                  "Blaze your Trail to Success"
+                </p>
+              </div>
+            </div>
+          </aside>
+
+          {/* PANEL 2: Product Grid */}
+          <section className="flex-1 bg-[#F9FAFB] p-10 flex flex-col min-w-0 overflow-hidden">
+            <div className="mb-10 flex justify-between items-center bg-white py-3 px-6 rounded-2xl border border-gray-100 shadow-sm">
+               <div className="flex items-center gap-4 w-full">
+                 <Search className="w-5 h-5 text-gray-400" />
+                 <input 
+                  type="text" 
+                  placeholder="Search menu items..." 
+                  className="w-full bg-transparent border-none focus:ring-0 text-sm py-2 font-medium"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                 />
+               </div>
+               <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap bg-gray-50 px-4 py-2 rounded-xl">
+                 <CheckCircle2 className="w-3 h-3 text-green-500" /> System Online
+               </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-4 -mr-4 custom-scrollbar">
+              <div className="grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 pb-12">
+                {filteredProducts.map((product) => (
+                  <motion.div
+                    key={product.id}
+                    whileHover={{ y: -8, shadow: "0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)" }}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => addToCart(product)}
+                    className="bg-white rounded-[2rem] p-7 border border-gray-50 shadow-sm hover:border-hcdc-blue/20 transition-all cursor-pointer group relative overflow-hidden"
+                  >
+                    <div className="flex flex-col items-center text-center gap-4">
+                      <div className="w-20 h-20 rounded-3xl bg-hcdc-light-blue flex items-center justify-center text-4xl group-hover:bg-white group-hover:scale-110 transition-all duration-300 shadow-inner group-hover:shadow-lg">
+                        {product.icon}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-800 text-sm leading-snug h-12 flex items-center justify-center px-2">{product.name}</h3>
+                        <p className="text-hcdc-red font-black text-xl mt-2 tracking-tight">{formatCurrency(product.price)}</p>
+                      </div>
+                      <div className="px-4 py-1.5 bg-gray-50 group-hover:bg-hcdc-blue group-hover:text-white text-gray-400 rounded-xl text-[10px] font-bold uppercase tracking-[0.1em] transition-colors">
+                        {product.category}
+                      </div>
+                    </div>
+                    
+                    {/* Floating +1 animation */}
+                    <AnimatePresence>
+                      {animations.map(anim => anim.id === product.id && (
+                        <motion.div
+                          key={anim.key}
+                          initial={{ opacity: 1, y: 0 }}
+                          animate={{ opacity: 0, y: -120 }}
+                          exit={{ opacity: 0 }}
+                          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+                        >
+                          <span className="text-3xl font-black text-hcdc-red drop-shadow-md">+1</span>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+
+                    <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="w-8 h-8 rounded-full bg-hcdc-red text-white flex items-center justify-center">
+                        <Plus className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </motion.div>
                 ))}
               </div>
             </div>
+          </section>
 
-            {/* Totals Summary */}
-            <div className="w-48 space-y-1.5">
-              <div className="flex justify-between text-[10px] font-bold text-gray-400">
-                <span>SUBTOTAL</span>
-                <span className="text-gray-600 font-mono">{formatCurrency(subtotal)}</span>
-              </div>
-              {discountRate > 0 && (
-                <div className="flex justify-between text-[10px] font-bold text-hcdc-red italic">
-                  <span>DISC ({discountType})</span>
-                  <span className="font-mono">-{formatCurrency(discountAmount)}</span>
+          {/* PANEL 3: Order Sidebar (Replaced Footer) */}
+          <aside className={`w-[400px] bg-white border-l border-gray-100 flex flex-col shadow-[-10px_0_30px_rgba(0,0,0,0.02)] z-30 transition-all duration-300 shrink-0`}>
+            {/* Cart Header */}
+            <div className="px-8 py-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/30 shrink-0">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-xl bg-hcdc-blue/5 flex items-center justify-center">
+                    <ShoppingCart className="w-5 h-5 text-hcdc-blue" />
+                  </div>
+                  <AnimatePresence>
+                    {totalItems > 0 && (
+                      <motion.span 
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="absolute -top-1.5 -right-1.5 bg-hcdc-red text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center shadow-sm border-2 border-white"
+                      >
+                        {totalItems}
+                      </motion.span>
+                    )}
+                  </AnimatePresence>
                 </div>
-              )}
-              <div className="flex justify-between text-[10px] font-bold text-gray-400">
-                <span>VAT (12%)</span>
-                <span className="text-gray-600 font-mono">{formatCurrency(vatAmount)}</span>
+                <div>
+                  <h2 className="font-heading font-black text-sm uppercase tracking-widest text-hcdc-blue">
+                    Current Order 
+                  </h2>
+                  <p className="text-gray-400 font-mono text-[10px] mt-0.5">{txnNumber}</p>
+                </div>
               </div>
-              <div className="pt-3 mt-1 border-t border-dashed border-gray-200 flex justify-between items-end">
-                <span className="text-[9px] font-black text-hcdc-blue uppercase tracking-widest pb-0.5">Total</span>
-                <span className="text-3xl font-black text-hcdc-red tracking-tighter leading-none">
-                  {formatCurrency(total)}
-                </span>
-              </div>
+              <button 
+                onClick={clearOrder}
+                className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-hcdc-red hover:bg-hcdc-light-red transition-all"
+                title="Clear Order"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
-          </div>
-        </div>
+            
+            {/* Cart Items List */}
+            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 custom-scrollbar bg-gray-50/10">
+              {cart.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-gray-300">
+                  <div className="w-24 h-24 mb-4 rounded-full bg-gray-50 flex items-center justify-center">
+                    <ShoppingCart className="w-10 h-10 text-gray-200" />
+                  </div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] italic opacity-50">Tray is empty</p>
+                </div>
+              ) : (
+                cart.map((item) => (
+                  <motion.div 
+                    initial={{ scale: 0.9, opacity: 0 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    key={item.id} 
+                    className="bg-white border border-gray-100 rounded-[1.5rem] p-4 flex gap-4 shrink-0 shadow-sm relative group"
+                  >
+                    <div className="w-16 h-16 rounded-2xl bg-hcdc-light-blue flex items-center justify-center text-3xl shrink-0">
+                      {item.icon}
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <h4 className="text-[13px] font-black text-gray-800 truncate leading-tight">{item.name}</h4>
+                      <p className="text-[12px] font-black text-hcdc-red mt-1 tracking-tight">{formatCurrency(item.price * item.quantity * (1 - discountRate))}</p>
+                    </div>
+                    
+                    <div className="flex flex-col items-center justify-between">
+                      <button 
+                         onClick={() => updateQuantity(item.id, -item.quantity)}
+                         className="w-6 h-6 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center hover:bg-hcdc-red hover:text-white transition-all shadow-sm self-end opacity-0 group-hover:opacity-100 absolute -top-2 -right-2"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                      
+                      <div className="flex items-center gap-1.5 bg-gray-50 rounded-xl px-1.5 py-1 border border-gray-100 mt-auto">
+                        <button 
+                          onClick={() => updateQuantity(item.id, -1)}
+                          className="w-6 h-6 flex items-center justify-center rounded-lg bg-white shadow-sm hover:text-hcdc-red transition-all active:scale-90"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="text-xs font-black w-6 text-center tabular-nums">{item.quantity}</span>
+                        <button 
+                          onClick={() => updateQuantity(item.id, 1)}
+                          className="w-6 h-6 flex items-center justify-center rounded-lg bg-white shadow-sm hover:text-hcdc-blue transition-all active:scale-90"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                ))
+              )}
+            </div>
 
-        {/* Right: Payment Controls */}
-        <div className="w-[300px] p-6 flex flex-col justify-center gap-4">
-          <div className="text-center mb-1">
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Total Items</p>
-            <p className="text-xl font-black text-hcdc-blue tabular-nums">{totalItems}</p>
-          </div>
-          <button
-            onClick={() => cart.length > 0 && setShowPaymentModal(true)}
-            disabled={cart.length === 0}
-            className="w-full h-14 bg-hcdc-red hover:bg-[#A01E1F] text-white font-black rounded-xl shadow-lg shadow-hcdc-red/30 flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale disabled:scale-100 disabled:shadow-none text-base tracking-wide group"
-          >
-            <CreditCard className="w-5 h-5 group-hover:rotate-12 transition-transform" /> PROCEED TO PAYMENT
-          </button>
-        </div>
-      </footer>
+            {/* Checkout Area */}
+            <div className="bg-white border-t border-gray-100 p-8 shrink-0">
+              {/* Discounts */}
+              <div className="mb-6">
+                <label className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 block mb-3">
+                  Apply Discount
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {(['REGULAR', 'PWD', 'SENIOR', 'ALUMNI'] as DiscountType[]).map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setDiscountType(type)}
+                      className={`py-2 rounded-xl text-[9px] font-black border-2 transition-all flex flex-col items-center justify-center gap-0.5 ${
+                        discountType === type
+                          ? type === 'PWD' ? 'bg-purple-600 border-purple-600 text-white shadow-lg shadow-purple-600/30' :
+                            type === 'SENIOR' ? 'bg-hcdc-gold border-hcdc-gold text-white shadow-lg shadow-hcdc-gold/30' :
+                            type === 'ALUMNI' ? 'bg-hcdc-blue border-hcdc-blue text-white shadow-lg shadow-hcdc-blue/30' :
+                            'bg-gray-800 border-gray-800 text-white shadow-lg'
+                          : 'bg-white border-gray-100 text-gray-400 hover:border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <span>{type === 'REGULAR' ? 'NONE' : type}</span>
+                      {type !== 'REGULAR' && (
+                         <span className="opacity-70 text-[7px]">{type === 'ALUMNI' ? '10%' : '20%'}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Totals Summary */}
+              <div className="space-y-2 mb-6">
+                <div className="flex justify-between text-xs font-bold text-gray-400">
+                  <span>SUBTOTAL</span>
+                  <span className="text-gray-600 font-mono">{formatCurrency(subtotal)}</span>
+                </div>
+                {discountRate > 0 && (
+                  <div className="flex justify-between text-xs font-bold text-hcdc-red italic">
+                    <span>DISC ({discountType})</span>
+                    <span className="font-mono">-{formatCurrency(discountAmount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-xs font-bold text-gray-400">
+                  <span>VAT (12%)</span>
+                  <span className="text-gray-600 font-mono">{formatCurrency(vatAmount)}</span>
+                </div>
+                <div className="pt-4 mt-2 border-t border-dashed border-gray-200 flex justify-between items-end">
+                  <span className="text-[11px] font-black text-gray-800 uppercase tracking-widest pb-1">Total Due</span>
+                  <span className="text-4xl font-black text-hcdc-red tracking-tighter leading-none">
+                    {formatCurrency(total)}
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => cart.length > 0 && setShowPaymentModal(true)}
+                disabled={cart.length === 0}
+                className="w-full h-16 bg-hcdc-red hover:bg-[#A01E1F] text-white font-black rounded-2xl shadow-xl shadow-hcdc-red/30 flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-30 disabled:grayscale disabled:scale-100 disabled:shadow-none text-base tracking-wide group"
+              >
+                <CreditCard className="w-5 h-5 group-hover:rotate-12 transition-transform" /> PROCEED TO CHECKOUT
+              </button>
+            </div>
+          </aside>
+      </main>
 
       {/* PAYMENT MODAL */}
       <AnimatePresence>
