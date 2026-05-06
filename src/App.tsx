@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { saveTransaction } from './transactions';
+import { getMenuItems, MenuItem } from './menuStorage';
 import { 
   Coffee, 
   ChevronRight, 
@@ -99,11 +100,15 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCartExpanded, setIsCartExpanded] = useState(true);
   const [animations, setAnimations] = useState<{ id: number; key: number }[]>([]);
+  const [products, setProducts] = useState<MenuItem[]>([]);
 
   // --- Effects ---
   useEffect(() => {
+    setProducts(getMenuItems());
     const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    // Refresh menu items periodically in case admin changes them
+    const menuRefresh = setInterval(() => setProducts(getMenuItems()), 2000);
+    return () => { clearInterval(timer); clearInterval(menuRefresh); };
   }, []);
 
   useEffect(() => {
@@ -115,12 +120,12 @@ export default function App() {
 
   // --- Calculations ---
   const filteredProducts = useMemo(() => {
-    return PRODUCTS.filter(p => {
+    return products.filter(p => {
       const matchesCategory = currentCategory === 'All Items' || p.category === currentCategory;
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [currentCategory, searchQuery]);
+  }, [currentCategory, searchQuery, products]);
 
   const discountRate = useMemo(() => {
     switch (discountType) {
@@ -339,8 +344,12 @@ export default function App() {
                     className="bg-white rounded-[2rem] p-7 border border-gray-50 shadow-sm hover:border-hcdc-blue/20 transition-all cursor-pointer group relative overflow-hidden"
                   >
                     <div className="flex flex-col items-center text-center gap-4">
-                      <div className="w-20 h-20 rounded-3xl bg-hcdc-light-blue flex items-center justify-center text-4xl group-hover:bg-white group-hover:scale-110 transition-all duration-300 shadow-inner group-hover:shadow-lg">
-                        {product.icon}
+                      <div className="w-20 h-20 rounded-3xl bg-hcdc-light-blue flex items-center justify-center group-hover:bg-white group-hover:scale-110 transition-all duration-300 shadow-inner group-hover:shadow-lg overflow-hidden">
+                        {product.image ? (
+                          <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-4xl">{product.icon}</span>
+                        )}
                       </div>
                       <div>
                         <h3 className="font-bold text-gray-800 text-sm leading-snug h-12 flex items-center justify-center px-2">{product.name}</h3>
@@ -431,8 +440,12 @@ export default function App() {
                     key={item.id} 
                     className="bg-white border border-gray-100 rounded-[1.5rem] p-4 flex gap-4 shrink-0 shadow-sm relative group"
                   >
-                    <div className="w-16 h-16 rounded-2xl bg-hcdc-light-blue flex items-center justify-center text-3xl shrink-0">
-                      {item.icon}
+                    <div className="w-16 h-16 rounded-2xl bg-hcdc-light-blue flex items-center justify-center shrink-0 overflow-hidden">
+                      {item.image ? (
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-3xl">{item.icon}</span>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <h4 className="text-[13px] font-black text-gray-800 truncate leading-tight">{item.name}</h4>
@@ -610,7 +623,7 @@ export default function App() {
       {/* RECEIPT MODAL */}
       <AnimatePresence>
         {showReceipt && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 no-print">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 print:bg-transparent">
             <motion.div 
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
